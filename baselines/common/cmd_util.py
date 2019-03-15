@@ -18,13 +18,17 @@ from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common import retro_wrappers
 
-def make_vec_env(env_id, env_type, num_env, seed, wrapper_kwargs=None, start_index=0, reward_scale=1.0, gamestate=None):
+
+def make_vec_env(env_id, env_type, num_env, seed, wrapper_kwargs=None,
+                 start_index=0, reward_scale=1.0, gamestate=None,
+                 reward = None):
     """
     Create a wrapped, monitored SubprocVecEnv for Atari and MuJoCo.
     """
     if wrapper_kwargs is None: wrapper_kwargs = {}
     mpi_rank = MPI.COMM_WORLD.Get_rank() if MPI else 0
     seed = seed + 10000 * mpi_rank if seed is not None else None
+
     def make_thunk(rank):
         return lambda: make_env(
             env_id=env_id,
@@ -33,7 +37,8 @@ def make_vec_env(env_id, env_type, num_env, seed, wrapper_kwargs=None, start_ind
             seed=seed,
             reward_scale=reward_scale,
             gamestate=gamestate,
-            wrapper_kwargs=wrapper_kwargs
+            wrapper_kwargs=wrapper_kwargs,
+            reward=reward
         )
 
     set_global_seeds(seed)
@@ -43,7 +48,7 @@ def make_vec_env(env_id, env_type, num_env, seed, wrapper_kwargs=None, start_ind
         return DummyVecEnv([make_thunk(start_index)])
 
 
-def make_env(env_id, env_type, subrank=0, seed=None, reward_scale=1.0, gamestate=None, wrapper_kwargs={}):
+def make_env(env_id, env_type, subrank=0, seed=None, reward_scale=1.0, gamestate=None, wrapper_kwargs={}, reward=None):
     mpi_rank = MPI.COMM_WORLD.Get_rank() if MPI else 0
     if env_type == 'atari':
         env = make_atari(env_id)
@@ -54,10 +59,14 @@ def make_env(env_id, env_type, subrank=0, seed=None, reward_scale=1.0, gamestate
     else:
         env = gym.make(env_id)
 
+    env.unwrapped.reward = reward
+
     env.seed(seed + subrank if seed is not None else None)
+    rew_components = tuple(reward.to_dict().keys()) if reward is not None else ()
     env = Monitor(env,
                   logger.get_dir() and os.path.join(logger.get_dir(), str(mpi_rank) + '.' + str(subrank)),
-                  allow_early_resets=True)
+                  allow_early_resets=True,
+                  rew_component_keywords=rew_components)
 
     if env_type == 'atari':
         env = wrap_deepmind(env, **wrapper_kwargs)
