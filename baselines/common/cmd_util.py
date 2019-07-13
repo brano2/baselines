@@ -59,10 +59,10 @@ def make_env(env_id, env_type, subrank=0, seed=None, reward_scale=1.0, gamestate
     else:
         env = gym.make(env_id)
 
-    env.unwrapped.reward = reward
+    # env.unwrapped.reward = reward
 
     env.seed(seed + subrank if seed is not None else None)
-    rew_components = tuple(reward.to_dict().keys()) if reward is not None else ()
+    rew_components = tuple(reward.keys()) if reward is not None else ()
     env = Monitor(env,
                   logger.get_dir() and os.path.join(logger.get_dir(), str(mpi_rank) + '.' + str(subrank)),
                   allow_early_resets=True,
